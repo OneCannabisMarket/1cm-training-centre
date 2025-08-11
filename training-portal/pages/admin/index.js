@@ -11,6 +11,7 @@ export default function AdminHome() {
           <Link href="/admin/users" className="card">Manage Users</Link>
           <Link href="/admin/modules" className="card">Manage Modules</Link>
           <Link href="/admin/quizzes" className="card">Manage Quizzes</Link>
+          <Link href="/admin/progress" className="card">Progress Dashboard</Link>
         </div>
       </Layout>
     </ProtectedRoute>

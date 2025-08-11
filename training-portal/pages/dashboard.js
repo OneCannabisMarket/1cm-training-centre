@@ -1,28 +1,28 @@
 import Layout from '../components/Layout';
 import ProtectedRoute from '../components/ProtectedRoute';
 import Link from 'next/link';
-import { collection, doc, getDoc, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../lib/auth';
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [modules, setModules] = useState([]);
   const [progressMap, setProgressMap] = useState({});
 
   useEffect(() => {
-    if (!user) return;
+    if (!db) return;
     const q = query(collection(db, 'modules'), orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(q, (snap) => {
       const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setModules(list);
     });
     return () => unsub();
-  }, [user]);
+  }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !db) return;
     const unsub = onSnapshot(collection(db, 'progress'), (snap) => {
       const map = {};
       snap.docs.forEach((d) => {
@@ -34,12 +34,22 @@ export default function DashboardPage() {
     return () => unsub();
   }, [user]);
 
+  const visibleModules = useMemo(() => {
+    if (!profile) return [];
+    const role = profile.role;
+    return modules.filter((m) => {
+      const byRole = (m.assignedRoles || []).length === 0 || (m.assignedRoles || []).includes(role);
+      const byUser = (m.assignedUserIds || []).length === 0 || (m.assignedUserIds || []).includes(user?.uid);
+      return byRole && byUser;
+    });
+  }, [modules, profile, user]);
+
   return (
     <ProtectedRoute>
       <Layout>
         <h1 className="text-xl font-semibold mb-4">Your Training</h1>
         <div className="grid gap-4">
-          {modules.map((m) => {
+          {visibleModules.map((m) => {
             const prog = progressMap[m.id];
             return (
               <div key={m.id} className="card">
@@ -56,8 +66,8 @@ export default function DashboardPage() {
               </div>
             );
           })}
-          {modules.length === 0 && (
-            <div className="text-gray-600">No modules assigned yet.</div>
+          {visibleModules.length === 0 && (
+            <div className="text-gray-600">No modules assigned.</div>
           )}
         </div>
       </Layout>

@@ -7,9 +7,9 @@ import { useEffect, useState } from 'react';
 export default function AdminQuizzes() {
   const [quizzes, setQuizzes] = useState([]);
   const [title, setTitle] = useState('');
-  const [question, setQuestion] = useState('');
-  const [options, setOptions] = useState(['', '', '', '']);
-  const [answerIndex, setAnswerIndex] = useState(0);
+  const [questions, setQuestions] = useState([
+    { question: '', options: ['', ''], answerIndex: 0 },
+  ]);
 
   useEffect(() => {
     const q = query(collection(db, 'quizzes'), orderBy('createdAt', 'desc'));
@@ -17,27 +17,54 @@ export default function AdminQuizzes() {
     return () => unsub();
   }, []);
 
+  function updateQuestion(qi, field, value) {
+    setQuestions((prev) => prev.map((q, i) => (i === qi ? { ...q, [field]: value } : q)));
+  }
+  function updateOption(qi, oi, value) {
+    setQuestions((prev) => prev.map((q, i) => {
+      if (i !== qi) return q;
+      const opts = q.options.slice();
+      opts[oi] = value;
+      return { ...q, options: opts };
+    }));
+  }
+  function addQuestion() {
+    setQuestions((prev) => [...prev, { question: '', options: ['', ''], answerIndex: 0 }]);
+  }
+  function removeQuestion(qi) {
+    setQuestions((prev) => prev.filter((_, i) => i !== qi));
+  }
+  function addOption(qi) {
+    setQuestions((prev) => prev.map((q, i) => i === qi ? { ...q, options: [...q.options, ''] } : q));
+  }
+  function removeOption(qi, oi) {
+    setQuestions((prev) => prev.map((q, i) => {
+      if (i !== qi) return q;
+      const opts = q.options.filter((_, idx) => idx !== oi);
+      const answerIndex = Math.min(q.answerIndex, Math.max(0, opts.length - 1));
+      return { ...q, options: opts, answerIndex };
+    }));
+  }
+
   async function createQuiz(e) {
     e.preventDefault();
-    if (!title.trim() || !question.trim()) return;
-    const cleanOptions = options.map((o) => o.trim()).filter(Boolean);
-    if (cleanOptions.length < 2) return;
+    if (!title.trim()) return;
+    const cleaned = questions
+      .map((q) => ({
+        type: 'mcq',
+        question: q.question.trim(),
+        options: q.options.map((o) => o.trim()).filter(Boolean),
+        answerIndex: q.answerIndex,
+      }))
+      .filter((q) => q.question && q.options.length >= 2 && q.answerIndex >= 0 && q.answerIndex < q.options.length);
+    if (cleaned.length === 0) return;
     await addDoc(collection(db, 'quizzes'), {
       title: title.trim(),
-      questions: [
-        {
-          type: 'mcq',
-          question: question.trim(),
-          options: cleanOptions,
-          answerIndex,
-        },
-      ],
+      questions: cleaned,
       createdAt: serverTimestamp(),
     });
     setTitle('');
-    setQuestion('');
-    setOptions(['', '', '', '']);
-    setAnswerIndex(0);
+    setQuestions([{ question: '', options: ['', ''], answerIndex: 0 }]);
   }
 
   async function removeQuiz(id) {
@@ -52,16 +79,36 @@ export default function AdminQuizzes() {
 
         <form onSubmit={createQuiz} className="card mb-6 flex flex-col gap-3">
           <input className="input" placeholder="Quiz title" value={title} onChange={(e) => setTitle(e.target.value)} />
-          <input className="input" placeholder="Question" value={question} onChange={(e) => setQuestion(e.target.value)} />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {options.map((opt, idx) => (
-              <input key={idx} className="input" placeholder={`Option ${idx + 1}`} value={opt} onChange={(e) => setOptions((prev) => prev.map((p, i) => (i === idx ? e.target.value : p)))} />
-            ))}
+
+          {questions.map((q, qi) => (
+            <div key={qi} className="border rounded-md p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-medium">Question {qi + 1}</div>
+                {questions.length > 1 && (
+                  <button type="button" className="text-sm text-red-600" onClick={() => removeQuestion(qi)}>Remove</button>
+                )}
+              </div>
+              <input className="input mb-2" placeholder="Question text" value={q.question} onChange={(e) => updateQuestion(qi, 'question', e.target.value)} />
+              <div className="grid gap-2">
+                {q.options.map((opt, oi) => (
+                  <div key={oi} className="flex gap-2 items-center">
+                    <input className="input flex-1" placeholder={`Option ${oi + 1}`} value={opt} onChange={(e) => updateOption(qi, oi, e.target.value)} />
+                    {q.options.length > 2 && (
+                      <button type="button" className="text-sm text-red-600" onClick={() => removeOption(qi, oi)}>Remove</button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" className="btn w-max" onClick={() => addOption(qi)}>Add option</button>
+              </div>
+              <label className="text-sm mt-2 block">Correct answer index
+                <input type="number" min={0} max={Math.max(0, q.options.length - 1)} className="input mt-1" value={q.answerIndex} onChange={(e) => updateQuestion(qi, 'answerIndex', parseInt(e.target.value || '0', 10))} />
+              </label>
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <button type="button" className="btn" onClick={addQuestion}>Add question</button>
+            <button className="btn" type="submit">Create Quiz</button>
           </div>
-          <label className="text-sm">Correct answer index
-            <input type="number" min={0} max={options.length - 1} className="input mt-1" value={answerIndex} onChange={(e) => setAnswerIndex(parseInt(e.target.value || '0', 10))} />
-          </label>
-          <button className="btn self-start">Create Quiz</button>
         </form>
 
         <div className="grid gap-3">
