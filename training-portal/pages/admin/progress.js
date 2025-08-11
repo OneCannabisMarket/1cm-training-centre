@@ -10,6 +10,9 @@ export default function AdminProgress() {
   const [progress, setProgress] = useState([]);
   const [selectedModuleId, setSelectedModuleId] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
   useEffect(() => {
     if (!db) return;
@@ -19,13 +22,29 @@ export default function AdminProgress() {
     return () => { unsubM(); unsubU(); unsubP(); };
   }, []);
 
-  const filteredProgress = useMemo(() => progress.filter((p) => (
-    (!selectedModuleId || p.moduleId === selectedModuleId) &&
-    (!selectedUserId || p.uid === selectedUserId)
-  )), [progress, selectedModuleId, selectedUserId]);
-
   const moduleMap = useMemo(() => Object.fromEntries(modules.map((m) => [m.id, m])), [modules]);
   const userMap = useMemo(() => Object.fromEntries(users.map((u) => [u.id, u])), [users]);
+
+  const filteredProgress = useMemo(() => {
+    const base = progress.filter((p) => (
+      (!selectedModuleId || p.moduleId === selectedModuleId) &&
+      (!selectedUserId || p.uid === selectedUserId)
+    ));
+    const term = search.trim().toLowerCase();
+    if (!term) return base;
+    return base.filter((p) => {
+      const userText = (userMap[p.uid]?.displayName || userMap[p.uid]?.email || '').toLowerCase();
+      const moduleText = (moduleMap[p.moduleId]?.title || '').toLowerCase();
+      return userText.includes(term) || moduleText.includes(term);
+    });
+  }, [progress, selectedModuleId, selectedUserId, search, userMap, moduleMap]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredProgress.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const paged = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredProgress.slice(start, start + pageSize);
+  }, [filteredProgress, currentPage]);
 
   const summary = useMemo(() => {
     const modId = selectedModuleId || null;
@@ -42,29 +61,33 @@ export default function AdminProgress() {
     <ProtectedRoute allow={["admin"]}>
       <Layout>
         <h1 className="text-xl font-semibold mb-4">Progress Dashboard</h1>
-        <div className="card mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
+        <div className="card mb-4 grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div className="sm:col-span-1">
             <div className="text-sm mb-1">Filter by Module</div>
-            <select className="input" value={selectedModuleId} onChange={(e) => setSelectedModuleId(e.target.value)}>
+            <select className="input" value={selectedModuleId} onChange={(e) => { setSelectedModuleId(e.target.value); setPage(1); }}>
               <option value="">All modules</option>
               {modules.map((m) => <option key={m.id} value={m.id}>{m.title}</option>)}
             </select>
           </div>
-          <div>
+          <div className="sm:col-span-1">
             <div className="text-sm mb-1">Filter by User</div>
-            <select className="input" value={selectedUserId} onChange={(e) => setSelectedUserId(e.target.value)}>
+            <select className="input" value={selectedUserId} onChange={(e) => { setSelectedUserId(e.target.value); setPage(1); }}>
               <option value="">All users</option>
               {users.map((u) => <option key={u.id} value={u.id}>{u.displayName || u.email}</option>)}
             </select>
           </div>
+          <div className="sm:col-span-2">
+            <div className="text-sm mb-1">Search</div>
+            <input className="input" placeholder="Search user or module" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+          </div>
         </div>
 
         <div className="grid gap-4">
-          {filteredProgress.length === 0 && (
+          {paged.length === 0 && (
             <div className="text-gray-600">No progress yet.</div>
           )}
 
-          {filteredProgress.map((p) => (
+          {paged.map((p) => (
             <div key={p.id} className="card">
               <div className="font-semibold">{userMap[p.uid]?.displayName || userMap[p.uid]?.email || p.uid}</div>
               <div className="text-sm text-gray-600">Module: {moduleMap[p.moduleId]?.title || p.moduleId}</div>
@@ -83,6 +106,12 @@ export default function AdminProgress() {
               ))}
             </div>
           </div>
+        </div>
+
+        <div className="flex items-center justify-between mt-4">
+          <button className="btn" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Prev</button>
+          <div className="text-sm text-gray-600">Page {currentPage} of {totalPages}</div>
+          <button className="btn" disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</button>
         </div>
       </Layout>
     </ProtectedRoute>

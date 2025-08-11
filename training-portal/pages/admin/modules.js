@@ -11,13 +11,32 @@ export default function AdminModules() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [users, setUsers] = useState([]);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
   useEffect(() => {
     const q = query(collection(db, 'modules'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, (snap) => setModules(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    const unsub = onSnapshot(q, (snap) => {
+      setModules(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setPage(1);
+    });
     const unsubU = onSnapshot(collection(db, 'users'), (snap) => setUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
     return () => { unsub(); unsubU(); };
   }, []);
+
+  const filteredModules = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return modules;
+    return modules.filter((m) => (m.title || '').toLowerCase().includes(term));
+  }, [modules, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredModules.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedModules = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredModules.slice(start, start + pageSize);
+  }, [filteredModules, currentPage]);
 
   async function createModule(e) {
     e.preventDefault();
@@ -62,8 +81,18 @@ export default function AdminModules() {
           <button className="btn self-start">Create Module</button>
         </form>
 
+        <div className="card mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <div className="text-sm mb-1">Search</div>
+            <input className="input" placeholder="Search module title" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <div className="flex items-end">
+            <div className="text-sm text-gray-600">{filteredModules.length} results</div>
+          </div>
+        </div>
+
         <div className="grid gap-3">
-          {modules.map((m) => (
+          {pagedModules.map((m) => (
             <div key={m.id} className="card">
               <div className="flex items-center justify-between">
                 <div>
@@ -106,6 +135,12 @@ export default function AdminModules() {
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="flex items-center justify-between mt-4">
+          <button className="btn" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Prev</button>
+          <div className="text-sm text-gray-600">Page {currentPage} of {totalPages}</div>
+          <button className="btn" disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</button>
         </div>
       </Layout>
     </ProtectedRoute>

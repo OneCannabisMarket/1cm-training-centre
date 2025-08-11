@@ -2,7 +2,7 @@ import Layout from '../../components/Layout';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 export default function AdminQuizzes() {
   const [quizzes, setQuizzes] = useState([]);
@@ -10,12 +10,31 @@ export default function AdminQuizzes() {
   const [questions, setQuestions] = useState([
     { question: '', options: ['', ''], answerIndex: 0 },
   ]);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
   useEffect(() => {
     const q = query(collection(db, 'quizzes'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, (snap) => setQuizzes(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    const unsub = onSnapshot(q, (snap) => {
+      setQuizzes(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setPage(1);
+    });
     return () => unsub();
   }, []);
+
+  const filteredQuizzes = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return quizzes;
+    return quizzes.filter((qz) => (qz.title || '').toLowerCase().includes(term));
+  }, [quizzes, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredQuizzes.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedQuizzes = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredQuizzes.slice(start, start + pageSize);
+  }, [filteredQuizzes, currentPage]);
 
   function updateQuestion(qi, field, value) {
     setQuestions((prev) => prev.map((q, i) => (i === qi ? { ...q, [field]: value } : q)));
@@ -111,8 +130,18 @@ export default function AdminQuizzes() {
           </div>
         </form>
 
+        <div className="card mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <div className="text-sm mb-1">Search</div>
+            <input className="input" placeholder="Search quiz title" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <div className="flex items-end">
+            <div className="text-sm text-gray-600">{filteredQuizzes.length} results</div>
+          </div>
+        </div>
+
         <div className="grid gap-3">
-          {quizzes.map((qz) => (
+          {pagedQuizzes.map((qz) => (
             <div key={qz.id} className="card">
               <div className="flex items-center justify-between">
                 <div>
@@ -126,6 +155,12 @@ export default function AdminQuizzes() {
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="flex items-center justify-between mt-4">
+          <button className="btn" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Prev</button>
+          <div className="text-sm text-gray-600">Page {currentPage} of {totalPages}</div>
+          <button className="btn" disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</button>
         </div>
       </Layout>
     </ProtectedRoute>

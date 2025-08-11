@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { signOut } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { useAuth } from '../lib/auth';
-import { isAdmin } from '../lib/roles';
+import { isAdmin, isManager } from '../lib/roles';
 
 export default function Layout({ children }) {
   const router = useRouter();
@@ -22,6 +22,9 @@ export default function Layout({ children }) {
           <div className="flex items-center gap-3">
             {profile && isAdmin(profile.role) && (
               <Link href="/admin" className="text-sm text-gray-700 hover:text-gray-900">Admin</Link>
+            )}
+            {profile && isManager(profile.role) && (
+              <Link href="/manager/progress" className="text-sm text-gray-700 hover:text-gray-900">Manager</Link>
             )}
             {user ? (
               <>
