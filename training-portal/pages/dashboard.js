@@ -10,15 +10,17 @@ export default function DashboardPage() {
   const { user, profile } = useAuth();
   const [modules, setModules] = useState([]);
   const [progressMap, setProgressMap] = useState({});
+  const [quizzes, setQuizzes] = useState([]);
 
   useEffect(() => {
     if (!db) return;
-    const q = query(collection(db, 'modules'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setModules(list);
+    const unsubM = onSnapshot(query(collection(db, 'modules'), orderBy('createdAt', 'desc')), (snap) => {
+      setModules(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
-    return () => unsub();
+    const unsubQ = onSnapshot(query(collection(db, 'quizzes'), orderBy('createdAt', 'desc')), (snap) => {
+      setQuizzes(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return () => { unsubM(); unsubQ(); };
   }, []);
 
   useEffect(() => {
@@ -27,7 +29,7 @@ export default function DashboardPage() {
       const map = {};
       snap.docs.forEach((d) => {
         const data = d.data();
-        if (data.uid === user.uid) map[data.moduleId] = data;
+        if (data.uid === user.uid) map[data.moduleId] = { id: d.id, ...data };
       });
       setProgressMap(map);
     });
@@ -44,32 +46,95 @@ export default function DashboardPage() {
     });
   }, [modules, profile, user]);
 
+  const quizMap = useMemo(() => Object.fromEntries(quizzes.map((q) => [q.id, q])), [quizzes]);
+
+  function isModuleCompleted(mod) {
+    const prog = progressMap[mod.id];
+    const total = mod.quizIds?.length || 0;
+    const completed = prog?.completedQuizIds?.length || 0;
+    if (total > 0) return completed >= total;
+    // No quizzes: consider completed if content marked completed
+    return Boolean(prog?.contentCompletedAt);
+  }
+
+  const sortedModules = useMemo(() => {
+    const list = [...visibleModules];
+    return list.sort((a, b) => {
+      const aDone = isModuleCompleted(a);
+      const bDone = isModuleCompleted(b);
+      if (aDone === bDone) return 0;
+      return aDone ? 1 : -1; // uncompleted first
+    });
+  }, [visibleModules, progressMap]);
+
+  const completedModules = useMemo(() => sortedModules.filter(isModuleCompleted), [sortedModules, progressMap]);
+  const incompleteModules = useMemo(() => sortedModules.filter((m) => !isModuleCompleted(m)), [sortedModules, progressMap]);
+
+  const completedQuizIds = useMemo(() => {
+    const ids = new Set();
+    Object.values(progressMap).forEach((p) => (p.completedQuizIds || []).forEach((id) => ids.add(id)));
+    return Array.from(ids);
+  }, [progressMap]);
+
+  const completedQuizzes = useMemo(() => completedQuizIds.map((qid) => quizMap[qid]).filter(Boolean), [completedQuizIds, quizMap]);
+
   return (
     <ProtectedRoute>
       <Layout>
         <h1 className="text-xl font-semibold mb-4">Your Training</h1>
+
         <div className="grid gap-4">
-          {visibleModules.map((m) => {
+          {sortedModules.map((m) => {
             const prog = progressMap[m.id];
+            const total = m.quizIds?.length || 0;
+            const completed = prog?.completedQuizIds?.length || 0;
+            const done = isModuleCompleted(m);
             return (
-              <div key={m.id} className="card">
+              <div key={m.id} className={`card ${done ? 'opacity-90' : ''}`}>
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="font-semibold">{m.title}</h2>
                     <p className="text-sm text-gray-600">{m.description || ''}</p>
+                    <div className="text-xs text-gray-600 mt-1">
+                      {total > 0 ? (
+                        <span>Completed quizzes: {completed} / {total}</span>
+                      ) : (
+                        <span>{progressMap[m.id]?.contentCompletedAt ? 'Content completed' : 'Content not completed'}</span>
+                      )}
+                    </div>
                   </div>
                   <Link href={`/modules/${m.id}`} className="btn">Open</Link>
                 </div>
-                {prog && (
-                  <div className="text-sm text-gray-600 mt-2">Completed quizzes: {prog.completedQuizIds?.length || 0} / {(m.quizIds?.length || 0)}</div>
-                )}
               </div>
             );
           })}
-          {visibleModules.length === 0 && (
+
+          {sortedModules.length === 0 && (
             <div className="text-gray-600">No modules assigned.</div>
           )}
         </div>
+
+        {completedModules.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-lg font-semibold mb-3">Completed Modules</h2>
+            <div className="grid gap-2">
+              {completedModules.map((m) => (
+                <div key={m.id} className="text-sm text-gray-800">{m.title}</div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {completedQuizzes.length > 0 && (
+          <div className="mt-6">
+            <h2 className="text-lg font-semibold mb-3">Completed Quizzes</h2>
+            <div className="grid gap-2">
+              {completedQuizzes.map((q) => (
+                <div key={q.id} className="text-sm text-gray-800">{q.title}</div>
+              ))}
+            </div>
+          </div>
+        )}
       </Layout>
     </ProtectedRoute>
   );
