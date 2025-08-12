@@ -16,12 +16,26 @@ export default function QuizTake() {
   const [score, setScore] = useState(0);
   const [percent, setPercent] = useState(0);
   const [passed, setPassed] = useState(false);
+  const [contentCompleted, setContentCompleted] = useState(true);
   const { user } = useAuth();
 
   useEffect(() => {
     if (!id) return;
     getDoc(doc(db, 'quizzes', id)).then((snap) => setQuiz(snap.exists() ? { id: snap.id, ...snap.data() } : null));
   }, [id]);
+
+  useEffect(() => {
+    async function checkModuleProgress() {
+      if (!moduleId || !user) {
+        setContentCompleted(true);
+        return;
+      }
+      const progressId = `${user.uid}_${moduleId}`;
+      const snap = await getDoc(doc(db, 'progress', progressId));
+      setContentCompleted(snap.exists() && Boolean(snap.data().contentCompletedAt));
+    }
+    checkModuleProgress();
+  }, [moduleId, user]);
 
   const numQuestions = quiz?.questions?.length || 0;
   const passingPercent = typeof quiz?.passingPercent === 'number' ? quiz.passingPercent : 100;
@@ -37,7 +51,6 @@ export default function QuizTake() {
 
   async function recordAttempt(passedNow, percentNow) {
     if (!user) return;
-    // Track attempts per user+quiz
     const attemptRef = doc(db, 'quizAttempts', `${user.uid}_${id}`);
     const attemptSnap = await getDoc(attemptRef);
     if (!attemptSnap.exists()) {
@@ -57,7 +70,6 @@ export default function QuizTake() {
       });
     }
 
-    // Only mark module progress when passed
     if (passedNow && moduleId) {
       const progressId = `${user.uid}_${moduleId}`;
       const ref = doc(db, 'progress', progressId);
@@ -67,6 +79,7 @@ export default function QuizTake() {
           uid: user.uid,
           moduleId,
           completedQuizIds: [id],
+          contentCompletedAt: serverTimestamp(),
           lastUpdatedAt: serverTimestamp(),
         });
       } else {
@@ -80,6 +93,7 @@ export default function QuizTake() {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (moduleId && !contentCompleted) return; // enforce gate
     const correct = grade();
     const pct = numQuestions > 0 ? Math.round((correct / numQuestions) * 100) : 0;
     const passNow = pct >= passingPercent;
@@ -107,20 +121,23 @@ export default function QuizTake() {
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <h1 className="text-xl font-semibold">{quiz.title}</h1>
             <div className="text-sm text-gray-600">Passing grade: {passingPercent}%</div>
+            {moduleId && !contentCompleted && (
+              <div className="text-sm text-red-600">Complete the module content before attempting this quiz.</div>
+            )}
             {quiz.questions.map((q, idx) => (
               <div key={idx} className="card">
                 <div className="font-medium">Q{idx + 1}. {q.question}</div>
                 <div className="mt-2 grid gap-2">
                   {q.options.map((opt, oi) => (
                     <label key={oi} className={`flex items-center gap-2 p-2 border rounded-md ${selected[idx] === oi ? 'border-blue-500' : 'border-gray-200'}`}>
-                      <input type="radio" name={`q_${idx}`} checked={selected[idx] === oi} onChange={() => setSelected((prev) => ({ ...prev, [idx]: oi }))} />
+                      <input type="radio" name={`q_${idx}`} checked={selected[idx] === oi} onChange={() => setSelected((prev) => ({ ...prev, [idx]: oi }))} disabled={moduleId && !contentCompleted} />
                       <span>{opt}</span>
                     </label>
                   ))}
                 </div>
               </div>
             ))}
-            <button className="btn self-start">Submit</button>
+            <button className="btn self-start" disabled={moduleId && !contentCompleted}>Submit</button>
             {submitted && (
               <div className="card">
                 <div className="font-medium">Score: {score} / {numQuestions} ({percent}%) — {passed ? 'Passed' : 'Not passed'}</div>
