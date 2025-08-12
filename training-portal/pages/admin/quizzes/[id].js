@@ -10,6 +10,7 @@ export default function AdminQuizEdit() {
   const { id } = router.query;
   const [title, setTitle] = useState('');
   const [questions, setQuestions] = useState([]);
+  const [passingPercent, setPassingPercent] = useState(100);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -30,6 +31,7 @@ export default function AdminQuizEdit() {
       }
       const data = snap.data();
       setTitle(data.title || '');
+      setPassingPercent(typeof data.passingPercent === 'number' ? data.passingPercent : 100);
       setQuestions(
         Array.isArray(data.questions)
           ? data.questions.map((q) => ({
@@ -103,6 +105,7 @@ export default function AdminQuizEdit() {
         return `Question ${i + 1} has an invalid answer index`;
       }
     }
+    if (typeof passingPercent !== 'number' || passingPercent < 0 || passingPercent > 100) return 'Passing grade must be 0-100';
     return '';
   }
 
@@ -122,7 +125,7 @@ export default function AdminQuizEdit() {
         options: q.options.map((o) => o.trim()),
         answerIndex: q.answerIndex,
       }));
-      await updateDoc(doc(db, 'quizzes', id), { title: title.trim(), questions: cleaned });
+      await updateDoc(doc(db, 'quizzes', id), { title: title.trim(), questions: cleaned, passingPercent });
       setSuccess('Saved');
     } catch (e) {
       setError(e?.message || 'Failed to save');
@@ -148,6 +151,8 @@ export default function AdminQuizEdit() {
         <div className="card mb-4">
           <label className="text-sm">Title</label>
           <input className="input mt-1" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <label className="text-sm mt-3">Passing grade (%)</label>
+          <input className="input mt-1 w-32" type="number" min={0} max={100} value={passingPercent} onChange={(e) => setPassingPercent(parseInt(e.target.value || '0', 10))} />
         </div>
 
         {questions.map((q, qi) => (

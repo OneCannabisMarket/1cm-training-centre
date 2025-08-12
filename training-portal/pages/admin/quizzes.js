@@ -10,6 +10,7 @@ export default function AdminQuizzes() {
   const [questions, setQuestions] = useState([
     { question: '', options: ['', ''], answerIndex: 0 },
   ]);
+  const [passingPercent, setPassingPercent] = useState(100);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const pageSize = 10;
@@ -77,13 +78,16 @@ export default function AdminQuizzes() {
       }))
       .filter((q) => q.question && q.options.length >= 2 && q.answerIndex >= 0 && q.answerIndex < q.options.length);
     if (cleaned.length === 0) return;
+    const pass = Math.max(0, Math.min(100, Number.isFinite(passingPercent) ? passingPercent : 100));
     await addDoc(collection(db, 'quizzes'), {
       title: title.trim(),
       questions: cleaned,
+      passingPercent: pass,
       createdAt: serverTimestamp(),
     });
     setTitle('');
     setQuestions([{ question: '', options: ['', ''], answerIndex: 0 }]);
+    setPassingPercent(100);
   }
 
   async function removeQuiz(id) {
@@ -98,6 +102,8 @@ export default function AdminQuizzes() {
 
         <form onSubmit={createQuiz} className="card mb-6 flex flex-col gap-3">
           <input className="input" placeholder="Quiz title" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <label className="text-sm">Passing grade (%)</label>
+          <input className="input w-32" type="number" min={0} max={100} value={passingPercent} onChange={(e) => setPassingPercent(parseInt(e.target.value || '0', 10))} />
 
           {questions.map((q, qi) => (
             <div key={qi} className="border rounded-md p-3">
@@ -147,6 +153,7 @@ export default function AdminQuizzes() {
                 <div>
                   <div className="font-semibold">{qz.title}</div>
                   <div className="text-sm text-gray-600">Questions: {qz.questions?.length || 0}</div>
+                  <div className="text-sm text-gray-600">Passing: {qz.passingPercent ?? 100}%</div>
                 </div>
                 <div className="flex gap-2">
                   <a href={`/admin/quizzes/${qz.id}`} className="btn">Edit</a>
