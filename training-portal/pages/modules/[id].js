@@ -1,7 +1,7 @@
 import { useRouter } from 'next/router';
 import { doc, onSnapshot, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Layout from '../../components/Layout';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import Link from 'next/link';
@@ -14,6 +14,7 @@ export default function ModuleDetail() {
   const { user, profile } = useAuth();
   const [progress, setProgress] = useState(null);
   const [saving, setSaving] = useState(false);
+  const startedAtMsRef = useRef(null);
 
   useEffect(() => {
     if (!id || !db) return;
@@ -30,6 +31,36 @@ export default function ModuleDetail() {
     return () => unsub();
   }, [id, user]);
 
+  // Record a client start time when module is visible for a user
+  useEffect(() => {
+    if (!id || !user) return;
+    if (!startedAtMsRef.current) startedAtMsRef.current = Date.now();
+    async function ensureStart() {
+      const progressId = `${user.uid}_${id}`;
+      const ref = doc(db, 'progress', progressId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) {
+        await setDoc(ref, {
+          uid: user.uid,
+          moduleId: id,
+          completedQuizIds: [],
+          contentStartedAt: serverTimestamp(),
+          contentStartedAtMs: startedAtMsRef.current,
+          lastUpdatedAt: serverTimestamp(),
+        }, { merge: true });
+      } else if (!snap.data().contentStartedAt) {
+        await setDoc(ref, {
+          uid: user.uid,
+          moduleId: id,
+          contentStartedAt: serverTimestamp(),
+          contentStartedAtMs: snap.data().contentStartedAtMs || startedAtMsRef.current,
+          lastUpdatedAt: serverTimestamp(),
+        }, { merge: true });
+      }
+    }
+    ensureStart();
+  }, [id, user]);
+
   const visible = useMemo(() => {
     if (!moduleDoc || !profile) return false;
     const byRole = (moduleDoc.assignedRoles || []).length === 0 || (moduleDoc.assignedRoles || []).includes(profile.role);
@@ -42,6 +73,9 @@ export default function ModuleDetail() {
   async function markContentComplete() {
     if (!user || !id) return;
     setSaving(true);
+    const nowMs = Date.now();
+    const startMs = progress?.contentStartedAtMs || startedAtMsRef.current || nowMs;
+    const durationSeconds = Math.max(0, Math.round((nowMs - startMs) / 1000));
     const progressId = `${user.uid}_${id}`;
     const ref = doc(db, 'progress', progressId);
     const snap = await getDoc(ref);
@@ -50,11 +84,20 @@ export default function ModuleDetail() {
         uid: user.uid,
         moduleId: id,
         completedQuizIds: [],
+        contentStartedAt: serverTimestamp(),
+        contentStartedAtMs: startMs,
         contentCompletedAt: serverTimestamp(),
+        contentCompletedAtMs: nowMs,
+        contentDurationSeconds: durationSeconds,
         lastUpdatedAt: serverTimestamp(),
       });
     } else if (!snap.data().contentCompletedAt) {
-      await setDoc(ref, { ...snap.data(), contentCompletedAt: serverTimestamp(), lastUpdatedAt: serverTimestamp() });
+      await setDoc(ref, {
+        contentCompletedAt: serverTimestamp(),
+        contentCompletedAtMs: nowMs,
+        contentDurationSeconds: durationSeconds,
+        lastUpdatedAt: serverTimestamp(),
+      }, { merge: true });
     }
     setSaving(false);
   }

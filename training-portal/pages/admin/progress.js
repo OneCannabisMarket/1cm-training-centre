@@ -8,6 +8,7 @@ export default function AdminProgress() {
   const [modules, setModules] = useState([]);
   const [users, setUsers] = useState([]);
   const [progress, setProgress] = useState([]);
+  const [attempts, setAttempts] = useState([]);
   const [selectedModuleId, setSelectedModuleId] = useState('');
   const [selectedUserId, setSelectedUserId] = useState('');
   const [search, setSearch] = useState('');
@@ -19,7 +20,8 @@ export default function AdminProgress() {
     const unsubM = onSnapshot(query(collection(db, 'modules'), orderBy('createdAt', 'desc')), (snap) => setModules(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
     const unsubU = onSnapshot(query(collection(db, 'users'), orderBy('createdAt', 'desc')), (snap) => setUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
     const unsubP = onSnapshot(collection(db, 'progress'), (snap) => setProgress(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
-    return () => { unsubM(); unsubU(); unsubP(); };
+    const unsubA = onSnapshot(collection(db, 'quizAttempts'), (snap) => setAttempts(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    return () => { unsubM(); unsubU(); unsubP(); unsubA(); };
   }, []);
 
   const moduleMap = useMemo(() => Object.fromEntries(modules.map((m) => [m.id, m])), [modules]);
@@ -39,6 +41,8 @@ export default function AdminProgress() {
     });
   }, [progress, selectedModuleId, selectedUserId, search, userMap, moduleMap]);
 
+  const attemptsByUserQuiz = useMemo(() => Object.fromEntries(attempts.map((a) => [`${a.uid}_${a.quizId}`, a])), [attempts]);
+
   const totalPages = Math.max(1, Math.ceil(filteredProgress.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const paged = useMemo(() => {
@@ -56,6 +60,14 @@ export default function AdminProgress() {
     });
     return result;
   }, [modules, progress, selectedModuleId]);
+
+  function formatSeconds(s) {
+    if (s == null) return '-';
+    const sec = Math.max(0, Math.round(s));
+    const m = Math.floor(sec / 60);
+    const r = sec % 60;
+    return `${m}m ${r}s`;
+  }
 
   return (
     <ProtectedRoute allow={["admin"]}>
@@ -92,6 +104,15 @@ export default function AdminProgress() {
               <div className="font-semibold">{userMap[p.uid]?.displayName || userMap[p.uid]?.email || p.uid}</div>
               <div className="text-sm text-gray-600">Module: {moduleMap[p.moduleId]?.title || p.moduleId}</div>
               <div className="text-sm text-gray-600">Completed quizzes: {p.completedQuizIds?.length || 0} / {(moduleMap[p.moduleId]?.quizIds?.length || 0)}</div>
+              <div className="text-sm text-gray-600">Module read time: {formatSeconds(p.contentDurationSeconds)}</div>
+              {(moduleMap[p.moduleId]?.quizIds || []).map((qid) => {
+                const a = attemptsByUserQuiz[`${p.uid}_${qid}`];
+                return (
+                  <div key={qid} className="text-xs text-gray-600 ml-4 mt-1">
+                    Quiz: {qid} — attempts: {a?.attempts || 0}, best: {a?.bestPercent ?? 0}%{a?.bestPassSeconds != null ? `, best pass time: ${formatSeconds(a.bestPassSeconds)}` : ''}
+                  </div>
+                );
+              })}
             </div>
           ))}
 

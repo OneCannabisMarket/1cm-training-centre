@@ -1,5 +1,5 @@
 import { useRouter } from 'next/router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Layout from '../../components/Layout';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import { arrayUnion, collection, doc, getDoc, serverTimestamp, setDoc, updateDoc, increment } from 'firebase/firestore';
@@ -17,11 +17,16 @@ export default function QuizTake() {
   const [percent, setPercent] = useState(0);
   const [passed, setPassed] = useState(false);
   const [contentCompleted, setContentCompleted] = useState(true);
+  const attemptStartedAtMsRef = useRef(null);
   const { user } = useAuth();
 
   useEffect(() => {
     if (!id) return;
     getDoc(doc(db, 'quizzes', id)).then((snap) => setQuiz(snap.exists() ? { id: snap.id, ...snap.data() } : null));
+  }, [id]);
+
+  useEffect(() => {
+    attemptStartedAtMsRef.current = Date.now();
   }, [id]);
 
   useEffect(() => {
@@ -53,6 +58,11 @@ export default function QuizTake() {
     if (!user) return;
     const attemptRef = doc(db, 'quizAttempts', `${user.uid}_${id}`);
     const attemptSnap = await getDoc(attemptRef);
+
+    const endMs = Date.now();
+    const startMs = attemptStartedAtMsRef.current || endMs;
+    const durationSeconds = Math.max(0, Math.round((endMs - startMs) / 1000));
+
     if (!attemptSnap.exists()) {
       await setDoc(attemptRef, {
         uid: user.uid,
@@ -60,13 +70,25 @@ export default function QuizTake() {
         attempts: 1,
         bestPercent: percentNow,
         lastAttemptAt: serverTimestamp(),
+        lastAttemptStartedAtMs: startMs,
+        lastAttemptCompletedAtMs: endMs,
+        lastAttemptDurationSeconds: durationSeconds,
+        bestPassSeconds: passedNow ? durationSeconds : null,
       });
     } else {
       const prev = attemptSnap.data();
+      const nextBestPercent = Math.max(prev.bestPercent || 0, percentNow);
+      const nextBestPassSeconds = passedNow
+        ? Math.min(prev.bestPassSeconds || Infinity, durationSeconds)
+        : prev.bestPassSeconds ?? null;
       await updateDoc(attemptRef, {
         attempts: increment(1),
-        bestPercent: Math.max(prev.bestPercent || 0, percentNow),
+        bestPercent: nextBestPercent,
         lastAttemptAt: serverTimestamp(),
+        lastAttemptStartedAtMs: startMs,
+        lastAttemptCompletedAtMs: endMs,
+        lastAttemptDurationSeconds: durationSeconds,
+        bestPassSeconds: nextBestPassSeconds,
       });
     }
 
@@ -110,6 +132,7 @@ export default function QuizTake() {
     setScore(0);
     setPercent(0);
     setPassed(false);
+    attemptStartedAtMsRef.current = Date.now();
   }
 
   return (
