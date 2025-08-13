@@ -102,6 +102,10 @@ export default function ModuleDetail() {
     setSaving(false);
   }
 
+  function canEmbed(url) {
+    try { new URL(url); return true; } catch { return false; }
+  }
+
   return (
     <ProtectedRoute>
       <Layout>
@@ -113,6 +117,27 @@ export default function ModuleDetail() {
           <div className="flex flex-col gap-4">
             <h1 className="text-xl font-semibold">{moduleDoc.title}</h1>
             <article className="prose max-w-none" dangerouslySetInnerHTML={{ __html: moduleDoc.description || '' }} />
+
+            {(moduleDoc.embeds || []).length > 0 && (
+              <div className="grid gap-4">
+                {moduleDoc.embeds.map((e, idx) => (
+                  <div key={idx} className="card">
+                    <div className="font-medium mb-2">{e.title}</div>
+                    {canEmbed(e.url) ? (
+                      <iframe
+                        src={e.url}
+                        title={e.title}
+                        className="w-full border rounded-md"
+                        style={{ height: `${Math.max(200, Math.min(2000, e.height || 600))}px` }}
+                        sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                      />
+                    ) : (
+                      <a href={e.url} target="_blank" rel="noopener noreferrer" className="underline text-blue-600">Open link</a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="card">
               <div className="flex items-center justify-between">

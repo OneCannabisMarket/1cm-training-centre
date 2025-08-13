@@ -2,7 +2,7 @@ import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import Layout from '../../../components/Layout';
 import ProtectedRoute from '../../../components/ProtectedRoute';
-import { arrayRemove, arrayUnion, collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
+import { arrayRemove, arrayUnion, collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import RichText from '../../../components/RichText';
 import { ROLE } from '../../../lib/roles';
@@ -18,6 +18,8 @@ export default function AdminModuleEdit() {
   const [quizSearch, setQuizSearch] = useState('');
   const [userSearch, setUserSearch] = useState('');
   const [saving, setSaving] = useState(false);
+  const [embeds, setEmbeds] = useState([]);
+  const [newEmbed, setNewEmbed] = useState({ title: '', url: '', height: 600 });
 
   useEffect(() => {
     if (!id || !db) return;
@@ -27,6 +29,7 @@ export default function AdminModuleEdit() {
         setModuleDoc(data);
         setTitle(data.title || '');
         setDescription(data.description || '');
+        setEmbeds(Array.isArray(data.embeds) ? data.embeds : []);
       }
     });
     const unsubQ = onSnapshot(query(collection(db, 'quizzes'), orderBy('createdAt', 'desc')), (snap) => setQuizzes(snap.docs.map((d) => ({ id: d.id, ...d.data() }))));
@@ -36,7 +39,7 @@ export default function AdminModuleEdit() {
 
   async function save() {
     setSaving(true);
-    await updateDoc(doc(db, 'modules', id), { title, description });
+    await updateDoc(doc(db, 'modules', id), { title, description, embeds });
     setSaving(false);
   }
 
@@ -80,6 +83,22 @@ export default function AdminModuleEdit() {
     router.replace('/admin/modules');
   }
 
+  function addEmbed() {
+    const t = newEmbed.title.trim();
+    const u = newEmbed.url.trim();
+    const h = Number.isFinite(newEmbed.height) ? Math.max(200, Math.min(2000, newEmbed.height)) : 600;
+    if (!t || !u) return;
+    const next = [...embeds, { title: t, url: u, height: h }];
+    setEmbeds(next);
+    setNewEmbed({ title: '', url: '', height: 600 });
+  }
+
+  function removeEmbed(index) {
+    const next = embeds.slice();
+    next.splice(index, 1);
+    setEmbeds(next);
+  }
+
   const filteredQuizzes = useMemo(() => {
     const term = quizSearch.trim().toLowerCase();
     if (!term) return quizzes;
@@ -110,6 +129,30 @@ export default function AdminModuleEdit() {
                 <RichText value={description} onChange={setDescription} />
                 <button className="btn w-max" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
               </div>
+            </div>
+
+            <div className="card">
+              <div className="font-semibold mb-2">Embeds (external pages)</div>
+              <div className="grid gap-2">
+                {embeds.map((e, idx) => (
+                  <div key={idx} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                    <div className="flex-1">
+                      <div className="text-sm font-medium">{e.title}</div>
+                      <div className="text-xs text-gray-600 break-all">{e.url}</div>
+                      <div className="text-xs text-gray-600">Height: {e.height}px</div>
+                    </div>
+                    <button type="button" className="btn bg-red-600 hover:bg-red-700" onClick={() => removeEmbed(idx)}>Remove</button>
+                  </div>
+                ))}
+                {embeds.length === 0 && <div className="text-sm text-gray-600">No embeds added.</div>}
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <input className="input" placeholder="Title" value={newEmbed.title} onChange={(e) => setNewEmbed((prev) => ({ ...prev, title: e.target.value }))} />
+                <input className="input sm:col-span-2" placeholder="https://" value={newEmbed.url} onChange={(e) => setNewEmbed((prev) => ({ ...prev, url: e.target.value }))} />
+                <input className="input w-32" type="number" min={200} max={2000} value={newEmbed.height} onChange={(e) => setNewEmbed((prev) => ({ ...prev, height: parseInt(e.target.value || '600', 10) }))} />
+                <button type="button" className="btn" onClick={addEmbed}>Add Embed</button>
+              </div>
+              <div className="text-xs text-gray-600 mt-2">Note: Some sites block embedding with X-Frame-Options. In that case, users will see a link instead.</div>
             </div>
 
             <div className="card">
