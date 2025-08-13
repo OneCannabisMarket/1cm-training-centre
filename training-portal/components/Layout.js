@@ -16,9 +16,12 @@ export default function Layout({ children }) {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <nav className="border-b border-gray-200 bg-white">
+      <nav className="border-b border-gray-200 bg-secondary">
         <div className="container flex h-14 items-center justify-between">
-          <Link href="/" className="font-semibold">Training Portal</Link>
+          <Link href="/" className="flex items-center gap-2 font-semibold text-brand">
+            <img src="/logo-temp.svg" alt="Logo" className="h-7 w-7" />
+            Training Portal
+          </Link>
           <div className="flex items-center gap-3">
             {profile && isAdmin(profile.role) && (
               <Link href="/admin" className="text-sm text-gray-700 hover:text-gray-900">Admin</Link>
@@ -29,8 +32,7 @@ export default function Layout({ children }) {
             {user ? (
               <>
                 <Link href="/dashboard" className="text-sm text-gray-700 hover:text-gray-900">Dashboard</Link>
-                <Link href="/start" className="text-sm text-gray-700 hover:text-gray-900">Start Work</Link>
-                <button onClick={handleSignOut} className="btn text-sm">Logout</button>
+                <button onClick={handleSignOut} className="btn text-sm bg-brand hover:opacity-90">Logout</button>
               </>
             ) : (
               <>

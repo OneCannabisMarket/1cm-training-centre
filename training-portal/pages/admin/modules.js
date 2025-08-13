@@ -9,6 +9,7 @@ import { ROLE } from '../../lib/roles';
 export default function AdminModules() {
   const [modules, setModules] = useState([]);
   const [title, setTitle] = useState('');
+  const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState('');
@@ -43,13 +44,16 @@ export default function AdminModules() {
     if (!title.trim()) return;
     await addDoc(collection(db, 'modules'), {
       title: title.trim(),
+      summary: summary.trim(),
       description,
       quizIds: [],
       assignedRoles: [],
       assignedUserIds: [],
+      embeds: [],
       createdAt: serverTimestamp(),
     });
     setTitle('');
+    setSummary('');
     setDescription('');
   }
 
@@ -77,7 +81,8 @@ export default function AdminModules() {
 
         <form onSubmit={createModule} className="card mb-6 flex flex-col gap-3">
           <input className="input" placeholder="Module title" value={title} onChange={(e) => setTitle(e.target.value)} />
-          <RichText value={description} onChange={setDescription} placeholder="Short description" />
+          <input className="input" placeholder="Short summary (plain text)" value={summary} onChange={(e) => setSummary(e.target.value)} />
+          <RichText value={description} onChange={setDescription} placeholder="Rich description (HTML)" />
           <button className="btn self-start">Create Module</button>
         </form>
 

@@ -53,7 +53,6 @@ export default function DashboardPage() {
     const total = mod.quizIds?.length || 0;
     const completed = prog?.completedQuizIds?.length || 0;
     if (total > 0) return completed >= total;
-    // No quizzes: consider completed if content marked completed
     return Boolean(prog?.contentCompletedAt);
   }
 
@@ -63,12 +62,11 @@ export default function DashboardPage() {
       const aDone = isModuleCompleted(a);
       const bDone = isModuleCompleted(b);
       if (aDone === bDone) return 0;
-      return aDone ? 1 : -1; // uncompleted first
+      return aDone ? 1 : -1;
     });
   }, [visibleModules, progressMap]);
 
   const completedModules = useMemo(() => sortedModules.filter(isModuleCompleted), [sortedModules, progressMap]);
-  const incompleteModules = useMemo(() => sortedModules.filter((m) => !isModuleCompleted(m)), [sortedModules, progressMap]);
 
   const completedQuizIds = useMemo(() => {
     const ids = new Set();
@@ -78,10 +76,20 @@ export default function DashboardPage() {
 
   const completedQuizzes = useMemo(() => completedQuizIds.map((qid) => quizMap[qid]).filter(Boolean), [completedQuizIds, quizMap]);
 
+  const totalQuizzes = useMemo(() => sortedModules.reduce((sum, m) => sum + ((m.quizIds?.length) || 0), 0), [sortedModules]);
+  const completedCount = useMemo(() => Object.values(progressMap).reduce((sum, p) => sum + ((p.completedQuizIds?.length) || 0), 0), [progressMap]);
+  const allDone = totalQuizzes > 0 && completedCount >= totalQuizzes;
+
   return (
     <ProtectedRoute>
       <Layout>
         <h1 className="text-xl font-semibold mb-4">Your Training</h1>
+
+        <div className="card mb-4">
+          <div>Total quizzes: {totalQuizzes}</div>
+          <div>Completed: {completedCount}</div>
+          <div className="text-sm text-gray-600">{allDone ? 'All training completed' : 'Complete all quizzes to finish your training'}</div>
+        </div>
 
         <div className="grid gap-4">
           {sortedModules.map((m) => {
@@ -94,7 +102,7 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="font-semibold">{m.title}</h2>
-                    <p className="text-sm text-gray-600">{m.description || ''}</p>
+                    <p className="text-sm text-gray-600">{m.summary || ''}</p>
                     <div className="text-xs text-gray-600 mt-1">
                       {total > 0 ? (
                         <span>Completed quizzes: {completed} / {total}</span>
@@ -103,7 +111,7 @@ export default function DashboardPage() {
                       )}
                     </div>
                   </div>
-                  <Link href={`/modules/${m.id}`} className="btn">Open</Link>
+                  <Link href={`/modules/${m.id}`} className="btn bg-brand hover:opacity-90">Open</Link>
                 </div>
               </div>
             );
