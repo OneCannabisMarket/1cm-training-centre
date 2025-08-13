@@ -39,10 +39,12 @@ export default function DashboardPage() {
   const visibleModules = useMemo(() => {
     if (!profile) return [];
     const role = profile.role;
+    const province = profile.province || null;
     return modules.filter((m) => {
       const byRole = (m.assignedRoles || []).length === 0 || (m.assignedRoles || []).includes(role);
       const byUser = (m.assignedUserIds || []).length === 0 || (m.assignedUserIds || []).includes(user?.uid);
-      return byRole && byUser;
+      const byProvince = (m.assignedProvinces || []).length === 0 || (province && (m.assignedProvinces || []).includes(province));
+      return byRole && byUser && byProvince;
     });
   }, [modules, profile, user]);
 

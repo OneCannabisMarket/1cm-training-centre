@@ -13,7 +13,6 @@ export function AuthProvider({ children }) {
   const [loadingProfile, setLoadingProfile] = useState(true);
 
   useEffect(() => {
-    // Subscribe only in client when auth is available
     if (!auth) {
       setLoadingAuth(false);
       return;
@@ -46,22 +45,25 @@ export function AuthProvider({ children }) {
           .filter(Boolean);
         const defaultRole = adminEmails.includes((user.email || '').toLowerCase()) ? ROLE.ADMIN : ROLE.STAFF;
 
-        const inviteRef = doc(collection(db, 'invites'), (user.email || '').toLowerCase());
+        const inviteRef = doc(collection(db, 'invites'), (user.email || ''));
         const inviteSnap = await getDoc(inviteRef);
         const role = inviteSnap.exists() && inviteSnap.data().role ? inviteSnap.data().role : defaultRole;
         const displayName = user.displayName || (inviteSnap.exists() ? inviteSnap.data().displayName || '' : '');
+        const province = inviteSnap.exists() ? (inviteSnap.data().province || null) : null;
 
         await setDoc(ref, {
           uid: user.uid,
           email: user.email,
           displayName,
           role,
+          province: province,
           createdAt: serverTimestamp(),
-        });
+        }, { merge: true });
         if (inviteSnap.exists()) {
           await deleteDoc(inviteRef);
         }
-        setProfile({ id: user.uid, uid: user.uid, email: user.email, displayName, role });
+        const finalSnap = await getDoc(ref);
+        setProfile({ id: user.uid, ...finalSnap.data() });
         setLoadingProfile(false);
       }
     }

@@ -4,6 +4,7 @@ import { collection, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase
 import { db } from '../../lib/firebase';
 import { useEffect, useMemo, useState } from 'react';
 import { ROLE } from '../../lib/roles';
+import { PROVINCES } from '../../lib/geo';
 
 export default function AdminUsers() {
   const [users, setUsers] = useState([]);
@@ -46,6 +47,10 @@ export default function AdminUsers() {
     await updateDoc(doc(db, 'users', userId), { managerId: managerId || null });
   }
 
+  async function changeProvince(userId, province) {
+    await updateDoc(doc(db, 'users', userId), { province: province || null });
+  }
+
   return (
     <ProtectedRoute allow={["admin"]}>
       <Layout>
@@ -69,6 +74,7 @@ export default function AdminUsers() {
                 <th className="py-2 pr-4">Email</th>
                 <th className="py-2 pr-4">Role</th>
                 <th className="py-2 pr-4">Manager</th>
+                <th className="py-2 pr-4">Province</th>
               </tr>
             </thead>
             <tbody>
@@ -89,6 +95,12 @@ export default function AdminUsers() {
                       {managers.map((m) => (
                         <option key={m.id} value={m.id}>{m.displayName || m.email}</option>
                       ))}
+                    </select>
+                  </td>
+                  <td className="py-2 pr-4">
+                    <select className="input" value={u.province || ''} onChange={(e) => changeProvince(u.id, e.target.value)}>
+                      <option value="">None</option>
+                      {PROVINCES.map((p) => <option key={p.code} value={p.code}>{p.name}</option>)}
                     </select>
                   </td>
                 </tr>

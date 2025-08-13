@@ -6,6 +6,7 @@ import { arrayRemove, arrayUnion, collection, deleteDoc, doc, onSnapshot, orderB
 import { db } from '../../../lib/firebase';
 import RichText from '../../../components/RichText';
 import { ROLE } from '../../../lib/roles';
+import { PROVINCES } from '../../../lib/geo';
 
 export default function AdminModuleEdit() {
   const router = useRouter();
@@ -75,6 +76,12 @@ export default function AdminModuleEdit() {
     if (!moduleDoc) return;
     const hasUser = (moduleDoc.assignedUserIds || []).includes(userId);
     await updateDoc(doc(db, 'modules', id), { assignedUserIds: hasUser ? arrayRemove(userId) : arrayUnion(userId) });
+  }
+
+  async function toggleProvince(code) {
+    if (!moduleDoc) return;
+    const has = (moduleDoc.assignedProvinces || []).includes(code);
+    await updateDoc(doc(db, 'modules', id), { assignedProvinces: has ? arrayRemove(code) : arrayUnion(code) });
   }
 
   async function deleteModule() {
@@ -193,6 +200,21 @@ export default function AdminModuleEdit() {
                     <label key={role} className="flex items-center gap-2">
                       <input type="checkbox" checked={checked} onChange={() => toggleRole(role)} />
                       <span className="capitalize">{role}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="font-semibold mb-2">Assign by Province</div>
+              <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-2">
+                {PROVINCES.map((p) => {
+                  const checked = (moduleDoc.assignedProvinces || []).includes(p.code);
+                  return (
+                    <label key={p.code} className="flex items-center gap-2">
+                      <input type="checkbox" checked={checked} onChange={() => toggleProvince(p.code)} />
+                      <span>{p.name}</span>
                     </label>
                   );
                 })}
