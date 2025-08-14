@@ -19,7 +19,7 @@ export default function Layout({ children }) {
       <nav className="border-b border-gray-200 bg-secondary">
         <div className="container flex h-14 items-center justify-between">
           <Link href="/" className="flex items-center gap-2 font-semibold text-brand">
-            <img src="/logo-temp.svg" alt="Logo" className="h-7 w-7" />
+            <img src="/logo.gif" alt="Logo" className="h-7 w-7" />
             Training Portal
           </Link>
           <div className="flex items-center gap-3">
